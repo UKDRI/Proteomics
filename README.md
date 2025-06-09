@@ -48,11 +48,12 @@
 <!-- CONTACT -->
 ## 📞 Contact
 
+📧 Bethany Geary - [@ukdri_email](mailto:beth.geary@ukdri.ac.uk) - [beth.geary@ukdri.ac.uk](mailto:beth.geary@ukdri.ac.uk)
 
-📧 Your Name - [@ukdri_email](mailto:example@ukdri.ac.uk) - [example@ukdri.ac.uk](mailto:example@ukdri.ac.uk)
+🌐 Additional Links: [Main website](https://www.ukdri.ac.uk/platforms/proteomics-platform)
+🌐 Additional Links: [Portal page](https://portal.ukdri.ac.uk/platforms/uk-dri-proteomics-platform)
 
-🌐 Additional Links: [Project Link](https://<link-to-something>)
-
+Contact on Slack or via email
 
 <!-- ACKNOWLEDGMENTS -->
 ## 🙌 Acknowledgments
