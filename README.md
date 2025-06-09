@@ -35,11 +35,9 @@
 
 ## 👥 Team and Contributors
 
-🎓 **A short description about your team and the project contributors**
+🎓 **Primary contributor is Bethany Geary, Lead Scientist of the Proteomics Platform**
 
-* 👤 [Contributor 1](https://github.com/contributor1)
-* 👤 [Contributor 2](https://github.com/contributor2)
-* 👤 [Contributor 3](https://github.com/contributor3)
+* 👤 [Bethany Geary](https://github.com/bwgeary)
 
 <!-- LICENSE -->
 ## 📜 License
