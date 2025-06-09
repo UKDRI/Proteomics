@@ -1,7 +1,5 @@
 <!-- ABOUT THE PROJECT -->
-## About The Project
-
-🎯 **A short description on PROJECT / THEME / TEAM**
+## Repository for Proteomics data processing scripts and other related tools
 
 * ✅ Bullet Point 1
 * ✅ Bullet Point 2
