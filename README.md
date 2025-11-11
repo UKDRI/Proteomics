@@ -1,37 +1,5 @@
 <!-- ABOUT THE PROJECT -->
-## Repository for Proteomics data processing scripts and other related tools
-
-* ✅ Bullet Point 1
-* ✅ Bullet Point 2
-* ✅ Bullet Point 3
-
-## 📑 Table of Contents
-<ol>
-  <li>
-    <a href="#Link_to_the_chapter_folder">📂 Chapter_Name</a>
-    <ul>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-    </ul>
-  </li>
-  <li>
-    <a href="#Link_to_the_chapter_folder">📂 Chapter_Name</a>
-    <ul>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-    </ul>
-  </li>
-  <li>
-    <a href="#Link_to_the_chapter_folder">📂 Chapter_Name</a>
-    <ul>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-      <li><a href="#Link_to_the_page">📄 Page_Title</a></li>
-    </ul>
-  </li>
-</ol>
+## Repository for Proteomics data processing scripts and other related tools used and provided by the UK DRI Proteomics Platform
 
 ## 👥 Team and Contributors
 
@@ -55,11 +23,3 @@
 
 Contact on Slack or via email
 
-<!-- ACKNOWLEDGMENTS -->
-## 🙌 Acknowledgments
-
-📚 Use this space to list resources
-
-* 📌 [Reference 1](https://example.com)
-* 📌 [Reference 2](https://example.com)
-* 📌 [Reference 3](https://example.com)
