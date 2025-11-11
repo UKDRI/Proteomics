@@ -8,15 +8,12 @@ library(mice)
 library(preprocessCore)
 library(corrplot)
 set.seed(500)
-library(odbc)
-library(DBI)
-library(RPostgres)
 library(dplyr)
 library(Rtsne)
 library(rrcovNA)
+library(ggbiplot)
 beth.colours.reverse <- colorRampPalette( c("yellow","darkgrey","blue"), space="rgb")(100)
 beth.colours.colour <- colorRampPalette( c("#D52D00","#EF7627","#FF9A56","white","#D162A4","#B55690","#A30262"), space="rgb")(100)
-source("~/Scripts/BETH_functions.r")
 
 # Upload of DIA-NN output file
 
@@ -434,3 +431,4 @@ p <- ggplot(cvc.vol,aes(logFC,P.Value, label = cvc.vol$label, col = cvc.vol$col)
   theme_bw()
 
 ggsave("scaled_volcano_plot.pdf",p,scale = 5)
+
