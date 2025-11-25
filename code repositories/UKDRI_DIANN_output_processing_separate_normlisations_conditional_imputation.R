@@ -272,7 +272,6 @@ second.con.data <- impSeqRob(df_data2[,(as.numeric(as.factor(Condition)) == 2)])
 
 c.mmao <- cbind(first.con.data,second.con.data)
 
-Condition <- c(Condition[as.numeric(as.factor(Condition))==1],Condition[as.numeric(as.factor(Condition))==2])
 
 
 #c.mmao <- impSeqRob(df_data2)$x
@@ -281,9 +280,13 @@ Condition <- c(Condition[as.numeric(as.factor(Condition))==1],Condition[as.numer
 # This returns the proteins that did not have enough coverage to the imputed dataset
 
 seq2 <- 1:nrow(m.Aonly)
-comb.AO <- rbind(c.mmao,m.Aonly[seq2[!seq2 %in% match(rownames(c.mmao),rownames(m.Aonly))],])
 
+cut_values <- m.Aonly[seq2[!seq2 %in% match(rownames(c.mmao),rownames(m.Aonly))],]
+cut_values <- cbind(cut_values[,(as.numeric(as.factor(Condition)) == 1)],cut_values[,(as.numeric(as.factor(Condition)) == 2)])
+comb.AO <- rbind(c.mmao,cut_values)
 #comb.AO <- df_data2
+
+Condition <- c(Condition[as.numeric(as.factor(Condition))==1],Condition[as.numeric(as.factor(Condition))==2])
 
 
 #
@@ -478,3 +481,4 @@ error = function(e){
 
 }
 }
+
