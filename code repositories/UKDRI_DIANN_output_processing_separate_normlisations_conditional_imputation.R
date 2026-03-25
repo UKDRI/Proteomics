@@ -429,11 +429,11 @@ for(b in 1:3){
       
       CasevsControl1$Comparison <- paste(Condition[6],unique(Condition)[which(unique(Condition) != Condition[6])],sep="_vs_")
       
-      Lim.file.name <- paste(strsplit(getwd(), split = "/")[[1]][length(strsplit(getwd(), split = "/")[[1]])],paste(Condition[6],unique(Condition)[which(unique(Condition) != Condition[6])],sep="_vs_"),"_",pros[b],"pct_Limma.csv",sep = "_")
+      Lim.file.name <- paste(paste(Condition[6],unique(Condition)[which(unique(Condition) != Condition[6])],sep="_vs_"),"_",pros[b],"pct_Limma.csv",sep = "_")
       
       write.csv(CasevsControl1, file=Lim.file.name,row.names=TRUE, quote=FALSE)
       
-      pdf.file.name <- paste(strsplit(getwd(), split = "/")[[1]][length(strsplit(getwd(), split = "/")[[1]])],paste(Condition[6],unique(Condition)[which(unique(Condition) != Condition[6])],sep="_vs_"),"_",pros[b],"pct_HeatmapsPCA.pdf",sep = "_")
+      pdf.file.name <- paste(paste(Condition[6],unique(Condition)[which(unique(Condition) != Condition[6])],sep="_vs_"),"_",pros[b],"pct_HeatmapsPCA.pdf",sep = "_")
       
       beth.colours.reverse <- colorRampPalette( c("yellow","darkgrey","blue"), space="rgb")(100)
       
