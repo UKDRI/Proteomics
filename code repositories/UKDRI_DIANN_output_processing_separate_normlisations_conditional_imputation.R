@@ -267,6 +267,7 @@ print(nrow(df_data2))
 
 
 
+
 first.con.data <- impSeqRob(df_data2[,(as.numeric(as.factor(Condition)) == 1)])$x
 second.con.data <- impSeqRob(df_data2[,(as.numeric(as.factor(Condition)) == 2)])$x
 
@@ -274,21 +275,26 @@ c.mmao <- cbind(first.con.data,second.con.data)
 
 
 
+seq2 <- 1:nrow(m.Aonly)
+
+cut.proteins <- m.Aonly[seq2[!seq2 %in% match(rownames(c.mmao),rownames(m.Aonly))],]
+
+cut1 <- cut.proteins[,(as.numeric(as.factor(Condition)) == 1)]
+cut2 <- cut.proteins[,(as.numeric(as.factor(Condition)) == 2)]
+
+cut.proteins <- cbind(cut1,cut2)
+
+Condition <- c(Condition[as.numeric(as.factor(Condition))==1],Condition[as.numeric(as.factor(Condition))==2])
+
+
 #c.mmao <- impSeqRob(df_data2)$x
 
 
 # This returns the proteins that did not have enough coverage to the imputed dataset
 
-seq2 <- 1:nrow(m.Aonly)
 
-cut_values <- m.Aonly[seq2[!seq2 %in% match(rownames(c.mmao),rownames(m.Aonly))],]
-cut_values <- cbind(cut_values[,(as.numeric(as.factor(Condition)) == 1)],cut_values[,(as.numeric(as.factor(Condition)) == 2)])
-comb.AO <- rbind(c.mmao,cut_values)
-#comb.AO <- df_data2
-
-Condition <- c(Condition[as.numeric(as.factor(Condition))==1],Condition[as.numeric(as.factor(Condition))==2])
-
-
+comb.AO <- rbind(c.mmao,cut.proteins)
+                                
 #
 # The experimental condition !! Change this depending on which experimental groups you wish to showcase !!
 #
