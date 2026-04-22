@@ -1,0 +1,647 @@
+---
+title: "X181 DIA-NN Processing - Cortex"
+author: "Ran by : Bethany geary"
+date: "25/03/2026"
+output: html_document
+---
+
+## Library Import
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(readr)
+library(reshape2)
+library(ggplot2)
+library(limma)
+library(pheatmap)
+library(preprocessCore)
+library(corrplot)
+set.seed(500)
+library(odbc)
+library(DBI)
+library(RPostgres)
+library(dplyr)
+library(Rtsne)
+library(rrcovNA)
+ggbiplot <- function (pcobj, choices = 1:2, scale = 1, pc.biplot = TRUE, 
+                      obs.scale = 1 - scale, var.scale = scale, groups = NULL, 
+                      ellipse = FALSE, ellipse.prob = 0.68, labels = NULL, labels.size = 3, 
+                      alpha = 1, var.axes = TRUE, circle = FALSE, circle.prob = 0.69, 
+                      varname.size = 3, varname.adjust = 1.5, varname.abbrev = FALSE, 
+                      ...) 
+{
+  library(ggplot2)
+  library(plyr)
+  library(scales)
+  library(grid)
+  stopifnot(length(choices) == 2)
+  if (inherits(pcobj, "prcomp")) {
+    nobs.factor <- sqrt(nrow(pcobj$x) - 1)
+    d <- pcobj$sdev
+    u <- sweep(pcobj$x, 2, 1/(d * nobs.factor), FUN = "*")
+    v <- pcobj$rotation
+  }
+  else if (inherits(pcobj, "princomp")) {
+    nobs.factor <- sqrt(pcobj$n.obs)
+    d <- pcobj$sdev
+    u <- sweep(pcobj$scores, 2, 1/(d * nobs.factor), FUN = "*")
+    v <- pcobj$loadings
+  }
+  else if (inherits(pcobj, "PCA")) {
+    nobs.factor <- sqrt(nrow(pcobj$call$X))
+    d <- unlist(sqrt(pcobj$eig)[1])
+    u <- sweep(pcobj$ind$coord, 2, 1/(d * nobs.factor), FUN = "*")
+    v <- sweep(pcobj$var$coord, 2, sqrt(pcobj$eig[1:ncol(pcobj$var$coord), 
+                                                  1]), FUN = "/")
+  }
+  else if (inherits(pcobj, "lda")) {
+    nobs.factor <- sqrt(pcobj$N)
+    d <- pcobj$svd
+    u <- predict(pcobj)$x/nobs.factor
+    v <- pcobj$scaling
+    d.total <- sum(d^2)
+  }
+  else {
+    stop("Expected a object of class prcomp, princomp, PCA, or lda")
+  }
+  choices <- pmin(choices, ncol(u))
+  df.u <- as.data.frame(sweep(u[, choices], 2, d[choices]^obs.scale, 
+                              FUN = "*"))
+  v <- sweep(v, 2, d^var.scale, FUN = "*")
+  df.v <- as.data.frame(v[, choices])
+  names(df.u) <- c("xvar", "yvar")
+  names(df.v) <- names(df.u)
+  if (pc.biplot) {
+    df.u <- df.u * nobs.factor
+  }
+  r <- sqrt(qchisq(circle.prob, df = 2)) * prod(colMeans(df.u^2))^(1/4)
+  v.scale <- rowSums(v^2)
+  df.v <- r * df.v/sqrt(max(v.scale))
+  if (obs.scale == 0) {
+    u.axis.labs <- paste("standardized PC", choices, sep = "")
+  }
+  else {
+    u.axis.labs <- paste("PC", choices, sep = "")
+  }
+  u.axis.labs <- paste(u.axis.labs, sprintf("(%0.1f%% explained var.)", 
+                                            100 * pcobj$sdev[choices]^2/sum(pcobj$sdev^2)))
+  if (!is.null(labels)) {
+    df.u$labels <- labels
+  }
+  if (!is.null(groups)) {
+    df.u$groups <- groups
+  }
+  if (varname.abbrev) {
+    df.v$varname <- abbreviate(rownames(v))
+  }
+  else {
+    df.v$varname <- rownames(v)
+  }
+  df.v$angle <- with(df.v, (180/pi) * atan(yvar/xvar))
+  df.v$hjust = with(df.v, (1 - varname.adjust * sign(xvar))/2)
+  g <- ggplot(data = df.u, aes(x = xvar, y = yvar)) + xlab(u.axis.labs[1]) + 
+    ylab(u.axis.labs[2]) + coord_equal() + scale_fill_manual(values=c('#ffe119', '#4363d8', '#f58231', '#dcbeff')) + scale_color_manual(values=c('#ffe119', '#4363d8', '#f58231', '#dcbeff'))
+  if (var.axes) {
+    if (circle) {
+      theta <- c(seq(-pi, pi, length = 50), seq(pi, -pi, 
+                                                length = 50))
+      circle <- data.frame(xvar = r * cos(theta), yvar = r * 
+                             sin(theta))
+      g <- g + geom_path(data = circle, color = muted("white"), 
+                         size = 1/2, alpha = 1/3)
+    }
+    g <- g + geom_segment(data = df.v, aes(x = 0, y = 0, 
+                                           xend = xvar, yend = yvar), arrow = arrow(length = unit(1/2, 
+                                                                                                  "picas")), color = muted("red"))
+  }
+  if (!is.null(df.u$labels)) {
+    if (!is.null(df.u$groups)) {
+      g <- g + geom_text(aes(label = labels, color = groups), 
+                         size = labels.size)
+    }
+    else {
+      g <- g + geom_text(aes(label = labels), size = labels.size)
+    }
+  }
+  else {
+    if (!is.null(df.u$groups)) {
+      g <- g + geom_point(aes(color = groups, shape = groups), 
+                          alpha = alpha, size = 3)
+    }
+    else {
+      g <- g + geom_point(alpha = alpha)
+    }
+  }
+  if (!is.null(df.u$groups) && ellipse) {
+    theta <- c(seq(-pi, pi, length = 50), seq(pi, -pi, length = 50))
+    circle <- cbind(cos(theta), sin(theta))
+    ell <- ddply(df.u, "groups", function(x) {
+      if (nrow(x) <= 2) {
+        return(NULL)
+      }
+      sigma <- var(cbind(x$xvar, x$yvar))
+      mu <- c(mean(x$xvar), mean(x$yvar))
+      ed <- sqrt(qchisq(ellipse.prob, df = 2))
+      data.frame(sweep(circle %*% chol(sigma) * ed, 2, 
+                       mu, FUN = "+"), groups = x$groups[1])
+    })
+    names(ell)[1:2] <- c("xvar", "yvar")
+    g <- g + geom_path(data = ell, aes(color = groups, group = groups))
+  }
+  if (var.axes) {
+    g <- g + geom_text(data = df.v, aes(label = varname, 
+                                        x = xvar, y = yvar, angle = angle, hjust = hjust), 
+                       color = "darkred", size = varname.size)
+  }
+  g <- g + theme_bw()
+  return(g)
+}
+```
+
+## Main analysis pipeline
+
+Data import 
+
+```{r}
+
+Aonly <- read_delim("Cortex_report.pg_matrix.tsv", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+
+Aonly <- Aonly[grep(";",Aonly$Protein.Group,invert = T),]
+
+# Removing excessive filenaming
+
+colnames(Aonly) <- gsub(".*DRI","DRI",colnames(Aonly))
+colnames(Aonly) <- gsub("_S2.*","",colnames(Aonly))
+colnames(Aonly) <- gsub(".raw","",colnames(Aonly))
+colnames(Aonly) <- gsub(".202.*","",colnames(Aonly))
+colnames(Aonly) <- gsub("_202507.*","",colnames(Aonly))
+# Removing excessive columns
+
+Aonly <- Aonly[Aonly$N.Proteotypic.Sequences>1,]
+
+Aonly <- Aonly[grep("+",Aonly$Contaminant,invert=T),]
+
+
+m.Aonly <- data.matrix(Aonly[,-c(1:8)])
+rownames(m.Aonly) <- gsub(";.*","",Aonly$Protein.Group)
+```
+
+## Sample annotation
+
+```{r}
+mapper <- read_csv("C:/Users/BGeary001/Documents/DRIX181/Cortex/mapper_cortex.csv")
+
+Condition <- mapper$Condition[match(colnames(m.Aonly),mapper$Name)]
+colnames(m.Aonly) <- mapper$Unique[match(colnames(m.Aonly),mapper$Name)]
+
+unique(Condition)
+table(Condition)
+```
+```{r, include=FALSE}
+m.Aonly <- m.Aonly[,order(Condition,decreasing = T)]
+Condition <- Condition[order(Condition,decreasing = T)]
+
+Condition <- gsub("Control","Ctrl",Condition)
+saved.con <- Condition
+saved.mAonly <- m.Aonly
+
+mainDir <- getwd()
+
+k <- 1
+l <- 1
+
+
+m.Aonly <- saved.mAonly
+Condition <- saved.con
+subdiv.con <- Condition[grep(unique(Condition)[k],fixed=T,invert=T,Condition)]
+setwd(mainDir)
+
+m.Aonly <- saved.mAonly
+Condition <- saved.con
+    
+    
+m.Aonly <- m.Aonly[,grep(paste(unique(Condition)[k],unique(subdiv.con)[l],sep="|"), invert=F, Condition)]
+Condition <- Condition[grep(paste(unique(Condition)[k],unique(subdiv.con)[l],sep="|"), invert=F,Condition)]
+
+
+
+m.Aonly <- m.Aonly[rowSums(is.na(m.Aonly)) != ncol(m.Aonly),]
+  
+```
+
+## QC Plots
+
+```{r, echo=FALSE}
+
+X20220915 <- m.Aonly
+
+# Plots to show metrics
+
+na_count <-sapply(X20220915, function(y) sum(length(which(is.na(y)))))
+
+na.df <- as.data.frame(nrow(X20220915) - na_count)
+colnames(na.df) <- "ProteinIDs"
+na.df$Sample <- rownames(na.df)
+
+# Melt for ggplot purposes
+
+me.data <- melt(X20220915)
+me.data <- me.data[complete.cases(me.data),]
+me.data$Condition <- gsub("-.*","",me.data$Var2)
+
+print(ggplot(me.data,aes(Var2, fill = Condition))+
+  geom_bar()+
+  #scale_fill_manual(values = c('#ffe119', '#4363d8', '#f58231', '#dcbeff', '#800000', '#000075', '#a9a9a9',  '#000000'))+
+  ylab("Proteins per fraction")+
+  ggtitle("Amount of proteins in each sample")+
+  xlab("Fraction name")+
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)))
+
+```
+
+Barplot showing the amount of Proteins per sample
+
+---
+
+```{r, echo=FALSE}
+rownas <- as.data.frame(rowSums(is.na(X20220915)))
+rownas$Protein.Group <- rownames(X20220915)
+colnames(rownas)[1] <- "Na.Count"
+
+rownas$IDin <- (ncol(X20220915) - rownas$Na.Count)
+print(ggplot(rownas, aes(IDin))+
+  geom_bar(fill = "#ffe119")+
+  ylab("Number of proteins")+
+  xlab("Identified in number of samples")+
+  ggtitle("Protein identifications overlap")+
+  theme_bw())
+
+```
+
+Protein Identifications overlap, how many proteins were seen in how many of the samples. For example proteins seen in all samples are represented by the bar to the far right of the graph, conversely proteins seen in ony one sample are shown in the far left
+
+---
+
+```{r, echo=FALSE}
+
+me.data <- melt(X20220915)
+
+me.data$missing <- rownas$Na.Count[match(me.data$Var1,rownas$Protein.Group)]>1
+
+me.data <- me.data[complete.cases(me.data),]
+me.data$value <- log(me.data$value,2)
+
+
+print(ggplot(me.data,aes(value,col = missing))+
+  geom_density()+
+  scale_color_manual(values = c('#4363d8', '#f58231', '#dcbeff', '#800000', '#000075', '#a9a9a9',  '#000000'))+
+  xlab("Log2 Intensity")+
+  ylab("Density")+
+  theme_bw())
+
+```
+
+A density plot showing the abundance levels for proteins with missing values vs those without missing values. In general left-censored data is expected and therefore proteins with missing values should be of a lower abundance with overlap between the two distributions
+
+---
+
+```{r, echo=FALSE}
+
+me.data <- melt(X20220915)
+
+me.data$missing <- rownas$Na.Count[match(me.data$Var1,rownas$Protein.Group)]>0
+
+me.data <- me.data[complete.cases(me.data),]
+me.data$value <- log(me.data$value,2)
+
+print(ggplot(me.data,aes(value,col = Var2))+
+  geom_density(show.legend = F)+
+  #scale_color_manual(values = c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff', '#000000'))+
+  xlab("Log2 Intensity")+
+  facet_wrap(vars(Var2))+
+  ylab("Density")+
+  theme_bw())
+
+```
+
+Density plots for each sample, all samples of each condition are expected to have similar distributions. Skewed data or irregularities with the acquisition or search may be apparent here
+
+---
+
+## Normalisation
+
+Data is normalised so relative quantification can be performed
+
+
+```{r}
+
+
+library(preprocessCore)
+
+
+norm.dat <- as.data.frame(normalizeMedianValues(X20220915))
+
+norm.dat$Protein <- rownames(X20220915)
+colnames(norm.dat) <- c(colnames(X20220915),"Protein.Group")
+
+me.nor.dat <- melt(norm.dat)
+me.data <- melt(X20220915)
+
+me.nor.dat$Norm <- "Normalised"
+me.data$Norm <- "Not Normalised"
+
+colnames(me.data) <- colnames(me.nor.dat)
+
+comb.me.data <- rbind(me.nor.dat,me.data)
+comb.me.data$value <- log(comb.me.data$value,2)
+
+
+print(ggplot(comb.me.data,aes(value,variable, fill = Norm))+
+  facet_grid(cols=vars(Norm))+
+  scale_fill_manual(values = c('#4363d8', '#f58231', '#dcbeff', '#800000', '#000075', '#a9a9a9',  '#000000'))+
+  xlab("")+
+  ylab("")+
+  geom_boxplot()+
+  theme_bw())
+```
+
+The barplot showing the effect of normalisation can highlight irregularities with the distribution or showing large deviances for individua samples which may skew the results
+
+---
+
+```{r, echo=FALSE}
+
+name.save <- colnames(m.Aonly)
+rowname.save <- rownames(m.Aonly)
+
+m.Aonly <- normalizeMedianValues(m.Aonly)
+
+rownames(m.Aonly) <- rowname.save
+colnames(m.Aonly) <- name.save
+
+
+m.aonly.save <- m.Aonly
+
+
+df_data =m.Aonly
+
+library(rrcovNA)
+
+
+```
+
+
+## Imputation
+
+Imputation is performed on missing values where signal is present in more than 70% of each protein's data. Imputing on proteins with lower percentage of coverage can result is spurrious or irregular data outputs.
+
+```{r}
+
+zeroProp <- 0.25
+nSample=ncol(df_data)
+
+vect_zeroProp<-apply(df_data,1,(function(col) length(col[col==0])/nSample))
+index = which(as.numeric(vect_zeroProp) <= zeroProp)
+df_data2<-m.Aonly[which(as.numeric(vect_zeroProp) <= zeroProp),]
+N=nrow(df_data2)
+print(paste(N," proteins with more than ",(1 -zeroProp)*100,"% of ind with raw exp > 0"))
+print(nrow(df_data2))
+
+
+
+```
+
+The amount of proteins with a coverage of 70% or greater. Sequential imputation on each condition in isolation is performed then the results stiched back together with proteins that were not imputed upon
+
+---
+
+```{r}
+
+first.con.data <- impSeqRob(df_data2[,(as.numeric(as.factor(Condition)) == 1)])$x
+second.con.data <- impSeqRob(df_data2[,(as.numeric(as.factor(Condition)) == 2)])$x
+
+c.mmao <- cbind(first.con.data,second.con.data)
+
+Condition <- c(Condition[as.numeric(as.factor(Condition))==1],Condition[as.numeric(as.factor(Condition))==2])
+
+
+# This returns the proteins that did not have enough coverage to the imputed dataset
+
+seq2 <- 1:nrow(m.Aonly)
+comb.AO <- rbind(c.mmao,m.Aonly[seq2[!seq2 %in% match(rownames(c.mmao),rownames(m.Aonly))],])
+
+
+```
+
+```{r,echo=FALSE}
+
+
+comb.AO[comb.AO<0] <- 1
+comb.AO[is.na(comb.AO)] <- 1
+
+new_condition <- Condition
+
+con.combao <- comb.AO
+colnames(con.combao) <- Condition
+
+
+```
+
+A correlation plot is made to check overall correlation between samples
+
+```{r}
+
+
+
+corrplot(cor(comb.AO), method = 'color', order = 'AOE')
+corrplot(cor(con.combao), method = 'color', order = 'AOE')
+corrplot(cor(comb.AO,method = "spearman"), method = 'color', order = 'AOE')
+corrplot(cor(con.combao,method = "spearman"), method = 'color', order = 'AOE')
+
+
+
+```
+
+---
+
+## Outputs
+
+Files are written and output
+
+```{r}
+
+
+m.Aonly <- comb.AO
+
+colnames(m.Aonly) <- gsub("DRIX_099_","",gsub("_S2.*","",colnames(m.Aonly)))
+
+colnames(m.Aonly) <- paste(Condition,colnames(m.Aonly),sep=".")
+
+csv_out_name <- paste(strsplit(getwd(), split = "/")[[1]][length(strsplit(getwd(), split = "/")[[1]])],"imputed_normalised_filtered.csv",sep = "_")
+
+write.csv(m.Aonly,csv_out_name)
+
+m.Aonly <- log(m.Aonly,2)
+
+write.csv(m.Aonly, file="log2_imputed_normalised_filtered.csv",row.names=TRUE, quote=FALSE)
+
+```
+
+---
+
+## Statistical comparisons
+
+Limma is used for pairwise comparisons between samples
+
+```{r}
+
+
+m.Aonly <- m.Aonly[,order(Condition)]
+Condition <- Condition[order(Condition)]
+
+m.save <- m.Aonly
+con.save <- Condition
+
+#con.save <- gsub("Control","Ctrl",con.save)
+
+# Looping statistical comparisons
+
+m.Aonly <- m.save
+Condition <- con.save
+
+zeroProps <- c(0,0.5,1)
+pros <- c("100","50","0")
+
+
+
+```
+
+Multiple comparisons are done with different levels of missingness cutoff. 0 percent meaning there was signal across all proteins used in the comparison. 100 percent meaning every protein was used and an artificially low number was added for missing values for comparison purposes. In this use case 100 percent is likely the more useful one but the others were kept for information
+
+---
+
+```{r}
+
+tryCatch(
+  expr = {
+
+for(b in 1:3){
+  
+  
+  for(i in 1:1){
+    
+    m.Aonly <- m.save
+    Condition <- con.save
+    sub.con <- Condition[grep(unique(Condition)[i],fixed=T,invert=T,Condition)]
+    
+    for(j in 1:i){
+      
+      m.Aonly <- m.save
+      Condition <- con.save
+      
+      
+      m.Aonly <- m.Aonly[,grep(paste(unique(Condition)[i],unique(sub.con)[j],sep="|"), invert=F, Condition)]
+      Condition <- Condition[grep(paste(unique(Condition)[i],unique(sub.con)[j],sep="|"), invert=F,Condition)]
+      
+      
+      
+      m.Aonly[m.Aonly==0] <- NA
+      m.Aonly[m.Aonly=="-Inf"] <- NA
+      #m.Aonly <- m.Aonly[complete.cases(m.Aonly),]
+      
+      zeroProp <- zeroProps[b]
+      nSample=ncol(m.Aonly)
+      
+      vect_zeroProp<-apply(m.Aonly,1,(function(col) length(col[col==0])/nSample))
+      index = which(as.numeric(vect_zeroProp) <= zeroProp)
+      m.Aonly<-m.Aonly[which(as.numeric(vect_zeroProp) <= zeroProp),]
+      N=nrow(m.Aonly)
+      print(paste(N," proteins with more than ",(1 -zeroProp)*100,"% of ind with raw exp > 0"))
+      print(nrow(m.Aonly))
+      
+      
+      new_condition <- Condition
+      
+      
+      df_data2 = m.Aonly
+      
+      df_data2[is.na(df_data2)] <- 1
+      df_data2[which(df_data2 == "-Inf")] <- 1
+      df_data2 <- df_data2[!(rowSums(df_data2) == ncol(df_data2)),]
+      
+      case_index <- grep(Condition[7],fixed=T,Condition)
+      new_condition[case_index] = "Control"
+      
+      control_index = which(new_condition!="Control")
+      new_condition[control_index] = "Case"
+      
+      design <- model.matrix(~ -1+factor(new_condition))
+      
+      colnames(design) <- c("Control","Case")
+      
+      contrast.matrix <- makeContrasts(Control-Case,levels=design)
+      
+      fit <- lmFit(df_data2,design)
+      fit2 <- contrasts.fit(fit, contrast.matrix)
+      efit2 <- eBayes(fit2)
+      
+      CasevsControl1 <- topTreat(efit2, coef=1, adjust="fdr",sort.by="logFC",number=50000)
+      CasevsControl1 <- CasevsControl1[order(CasevsControl1$logFC, decreasing = T),]
+      
+      CasevsControl1$Comparison <- paste(Condition[7],unique(Condition)[which(unique(Condition) != Condition[7])],sep="_vs_")
+      
+      Lim.file.name <- paste(paste(Condition[7],unique(Condition)[which(unique(Condition) != Condition[7])],sep="_vs_"),"_",pros[b],"pct_Limma.csv",sep = "_")
+      
+      write.csv(CasevsControl1, file=Lim.file.name,row.names=TRUE, quote=FALSE)
+      
+      pdf.file.name <- paste(paste(Condition[7],unique(Condition)[which(unique(Condition) != Condition[7])],sep="_vs_"),"_",pros[b],"pct_HeatmapsPCA.pdf",sep = "_")
+      
+      beth.colours.reverse <- colorRampPalette( c("yellow","darkgrey","blue"), space="rgb")(100)
+      
+      
+      
+      
+      
+      print(ggbiplot(prcomp(t(df_data2), scale=F), scale = 1, obs.scale = 0, var.scale = 0, var.axes = FALSE,  varname.size = 0.75, ellipse.prob = 0.45, groups = Condition,  ellipse = TRUE, circle = FALSE))
+      
+      print(ggbiplot(prcomp(t(df_data2), scale=F), scale = 1, obs.scale = 0, var.scale = 0,labels = colnames(m.Aonly), labels.size = 2, var.axes = FALSE,  varname.size = 0.75, ellipse.prob = 0.45, groups = Condition,  ellipse = TRUE, circle = FALSE))
+      
+      mat_data = df_data2
+      index = which(mat_data == "-Inf")
+      mat_data[index] = 1
+      patient_group = Condition
+      Experiment_type= factor(patient_group)
+      annotation_col = data.frame(Experiment_type)
+      rownames(annotation_col)=colnames(mat_data)
+      colnames(annotation_col) <- " "
+      mat_data[]
+      # Specify colors
+      ann_colors = list(" " = c("#999999","#E69F00"))#,"#56B4E9","#009E73"))#,"#001100"))
+      names(ann_colors[[1]]) <- unique(Condition)
+      
+      mat_data <- mat_data[which(rowSums(mat_data)!=ncol(mat_data)),]
+      
+      pheatmap(mat_data, annotation_colors = ann_colors, color = beth.colours.reverse,show_colnames = T, show_rownames = F,clustering_distance_rows ="euclidean", clustering_distance_cols ="euclidean",  annotation_col = annotation_col,main = paste0(" "),scale = "row")
+      
+      
+      
+      
+      
+    }
+    
+  }
+}
+
+},
+error = function(e){
+  message('Error!')
+  print(e)
+}
+)
+
+```
+
+Graphs are shown in triplicate for each cut off. Firstly with proteins being required in all samples. Secondly with proteins being present in 50% of samples and Thirdly all proteins being used
+
+---
